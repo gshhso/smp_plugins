@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smp_extention"
+version = "0.1.0"
+description = "plugins for smp"
+readme = "README.md"
+authors = [
+	{name = "your name"}
+]
+requires-python = ">=3.10"
+dependencies = [
+	"segmentation_models_pytorch>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+	"pytest>=7.0.0",
+]
+
+[tool.setuptools]
+packages = ["smp_plugins"]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.pytest]
+testpaths = ["tests"] 
