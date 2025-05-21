@@ -219,7 +219,6 @@ class FSRelationModule(nn.Module):
 		in_channels: list[int],
 		shared_channels: int = 256, # C_eb
 		scene_channels: int = 2048, # C_-1
-		use_content_preservation: bool = True,
 		lambda_value: float = 0.5
 	):
 		"""
@@ -236,7 +235,6 @@ class FSRelationModule(nn.Module):
 		self.in_channels = in_channels
 		self.shared_channels = shared_channels
 		self.scene_channels = scene_channels
-		self.use_content_preservation = use_content_preservation
 		
 		# 为每个输入特征层创建尺度感知投影
 		self.projections = nn.ModuleList([
@@ -257,8 +255,7 @@ class FSRelationModule(nn.Module):
 		self.relation_computation = RelationComputation()
 		
 		# 内容保留模块
-		if self.use_content_preservation:
-			self.content_preservation = ContentPreservation(lambda_value)
+		self.content_preservation = ContentPreservation(lambda_value)
 	
 	def forward(self, features: list[Tensor]) -> list[Tensor]:
 		"""
@@ -299,8 +296,7 @@ class FSRelationModule(nn.Module):
 			enhanced_feat = encoded_feat * relation #(B, C_i, H_i, W_i) * (B, 1, H_i, W_i) -> (B, C_i, H_i, W_i)
 			
 			# 应用内容保留机制（如果启用）
-			if self.use_content_preservation:
-				enhanced_feat = self.content_preservation(enhanced_feat, encoded_feat)
+			enhanced_feat = self.content_preservation(enhanced_feat, encoded_feat)
 			
 			enhanced_features.append(enhanced_feat)
 		
@@ -318,7 +314,6 @@ class FarSegPlugin(nn.Module):
 		self,
 		feature_channels: list[int],
 		pyramid_channels: int = 256,
-		use_content_preservation: bool = True,
 		lambda_value: float = 0.5,
 	):
 		"""
@@ -326,13 +321,11 @@ class FarSegPlugin(nn.Module):
 		
 		Args:
 			pyramid_channels: 特征金字塔通道数
-			use_content_preservation: 是否使用内容保留机制
 			lambda_value: 内容保留机制的权重系数
 			feature_channels: 各尺度特征通道数，必须从编码器获取
 		"""
 		super().__init__()
 		self.pyramid_channels = pyramid_channels
-		self.use_content_preservation = use_content_preservation
 		self.lambda_value = lambda_value
 		
 		self.feature_channels = feature_channels
@@ -342,7 +335,6 @@ class FarSegPlugin(nn.Module):
 			in_channels=self.feature_channels,
 			shared_channels=self.pyramid_channels,
 			scene_channels=self.feature_channels[-1],
-			use_content_preservation=self.use_content_preservation,
 			lambda_value=self.lambda_value
 		)
 	
@@ -369,24 +361,7 @@ class FarSegPlugin(nn.Module):
 		# 将增强的特征与第一个原始特征合并
 		return [features[0]] + enhanced_features
 		
-	@classmethod
-	def from_encoder(cls, 
-					 encoder: nn.Module, 
-					 in_channels: int, 
-					 **kwargs: Any) -> 'FarSegPlugin':
-		"""
-		从编码器创建FarSegPlugin实例。
-		
-		Args:
-			encoder: 编码器实例
-			in_channels: 输入通道数
-			**kwargs: 其他参数
-			
-		Returns:
-			创建的FarSegPlugin实例
-		"""
-		# 直接使用传入的参数创建实例，PluginRegistry会自动处理feature_channels参数
-		return cls(**kwargs)
+
 
 
 

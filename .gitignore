@@ -1,0 +1,3 @@
+smp_plugins.egg-info/*
+__pycache__
+build*

@@ -2,14 +2,14 @@ import torch
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 from torch import Tensor
-from typing import Any, Optional, TypeVar, Type, cast, Dict, List, Protocol, Callable, get_type_hints
+from typing import Any, Optional, Type, cast, Dict, List, Protocol
 from segmentation_models_pytorch.base.model import SegmentationModel
 
 import functools
 import inspect
 
 # 导入实际的FarSegPlugin实现
-from fs import FarSegPlugin
+from .fs import FarSegPlugin
 
 # 保存对原始create_model的引用
 original_create_model = smp.create_model
@@ -31,23 +31,6 @@ class PluginProtocol(Protocol):
 		"""
 		...
 	
-	@classmethod
-	def from_encoder(cls, 
-					 encoder: nn.Module, 
-					 in_channels: int, 
-					 **kwargs: Any) -> 'PluginProtocol':
-		"""
-		从编码器创建插件实例。此方法将由子类选择性实现。
-		
-		Args:
-			encoder: 编码器实例
-			in_channels: 输入通道数
-			**kwargs: 其他参数
-			
-		Returns:
-			创建的插件实例
-		"""
-		return cls(**kwargs)
 
 # 插件基类
 class PluginBase(nn.Module):
@@ -69,24 +52,6 @@ class PluginBase(nn.Module):
 		"""
 		return features
 	
-	@classmethod
-	def from_encoder(cls, 
-					 encoder: nn.Module, 
-					 in_channels: int, 
-					 **kwargs: Any) -> 'PluginBase':
-		"""
-		从编码器创建插件实例。默认实现直接使用传入的参数创建实例。
-		子类可以覆盖此方法以从编码器中提取所需的参数。
-		
-		Args:
-			encoder: 编码器实例
-			in_channels: 输入通道数
-			**kwargs: 其他参数
-			
-		Returns:
-			创建的插件实例
-		"""
-		return cls(**kwargs)
 
 class ExtendableSegmentationModel(nn.Module):
 	"""
@@ -106,7 +71,9 @@ class ExtendableSegmentationModel(nn.Module):
 		super().__init__()
 		# 确保base_model是SegmentationModel类型
 		self.base_model = cast(SegmentationModel, base_model)
-		self.plugins = plugins or []
+		if plugins is None:
+			plugins = []
+		self.plugins = nn.ModuleList(plugins)
 		
 		# 保存原始模型的组件
 		self.encoder = cast(nn.Module, self.base_model.encoder)
@@ -126,13 +93,15 @@ class ExtendableSegmentationModel(nn.Module):
 		Returns:
 			模型输出，可能是单个张量或(masks, labels)元组
 		"""
-		# 在PyTorch中，模块实例可以像函数一样被调用，linter可能无法理解这一点
 		
 		# 1. 运行编码器
 		features = self.encoder(x)  
+  
 		# 2. 运行所有插件的瓶颈层处理
+		first_feature = features[0] #目前所有smp的decoder都不处理第一个feature
 		for plugin in self.plugins:
-			features = plugin.bottleneck_layer(features)
+			features = plugin.bottleneck_layer(features[1:])
+		features = [first_feature] + features
 		
 		# 3. 运行解码器
 		decoder_output = self.decoder(features)  
@@ -206,18 +175,10 @@ class PluginRegistry:
 		"""
 		plugin_class = self.get(name)
 		
-		# 检查插件类是否需要feature_channels参数
-		plugin_init_params = inspect.signature(plugin_class.__init__).parameters
-		if 'feature_channels' in plugin_init_params and 'feature_channels' not in kwargs:
-			# 尝试从编码器获取通道数信息
-			encoder_channels = self._get_encoder_channels(encoder, in_channels)
-			if encoder_channels:
-				kwargs['feature_channels'] = encoder_channels
-			else:
-				raise ValueError(f"无法从编码器'{encoder.__class__.__name__}'获取feature_channels参数，请手动提供")
+		encoder_channels = self._get_encoder_channels(encoder, in_channels)
+		kwargs['feature_channels'] = encoder_channels[1: ]  # remove first skip with same spatial resolution
 		
-		# 调用插件类的from_encoder方法创建实例
-		return plugin_class.from_encoder(encoder, in_channels, **kwargs)
+		return plugin_class(**kwargs)
 	
 	def keys(self) -> List[str]:
 		"""
