@@ -9,7 +9,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from typing import Optional, Any
+from typing import Optional, Any, override
+
+from .plugin_base import PluginBase
 
 
 class ScaleAwareProjection(nn.Module):
@@ -303,7 +305,7 @@ class FSRelationModule(nn.Module):
 		return enhanced_features
 
 
-class FarSegPlugin(nn.Module):
+class FarSegPlugin(PluginBase):
 	"""
 	FarSeg++插件
 	
@@ -338,6 +340,7 @@ class FarSegPlugin(nn.Module):
 			lambda_value=self.lambda_value
 		)
 	
+	@override
 	def bottleneck_layer(self, features: list[Tensor]) -> list[Tensor]:
 		"""
 		瓶颈层处理，适配SMP扩展接口

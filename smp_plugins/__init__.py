@@ -2,6 +2,7 @@ __author__ = 'Poyuan Ou'
 __version__ = '0.1.0'
 
 # 导入子模块，并使它们成为包的一部分
+from . import plugin_base
 from . import fs
 from . import smp_extensions
 

@@ -10,47 +10,11 @@ import inspect
 
 # 导入实际的FarSegPlugin实现
 from .fs import FarSegPlugin
-
+from .plugin_base import PluginBase
 # 保存对原始create_model的引用
 original_create_model = smp.create_model
 
-# 插件接口协议
-class PluginProtocol(Protocol):
-	"""
-	插件接口协议，定义了插件必须实现的方法。
-	"""
-	def bottleneck_layer(self, features: List[torch.Tensor]) -> List[torch.Tensor]:
-		"""
-		在编码器和解码器之间处理特征。
-		
-		Args:
-			features: 编码器输出的特征列表
-			
-		Returns:
-			处理后的特征列表
-		"""
-		...
-	
 
-# 插件基类
-class PluginBase(nn.Module):
-	"""
-	插件基类，定义插件接口。
-	
-	所有插件必须继承此基类并实现bottleneck_layer方法。
-	"""
-	
-	def bottleneck_layer(self, features: List[torch.Tensor]) -> List[torch.Tensor]:
-		"""
-		在编码器和解码器之间处理特征。
-		
-		Args:
-			features: 编码器输出的特征列表
-			
-		Returns:
-			处理后的特征列表
-		"""
-		return features
 	
 
 class ExtendableSegmentationModel(nn.Module):
@@ -60,7 +24,7 @@ class ExtendableSegmentationModel(nn.Module):
 	包装原始SMP模型，并在编码器和解码器之间添加瓶颈层插件。
 	"""
 	
-	def __init__(self, base_model: SegmentationModel, plugins: List[PluginProtocol] | None = None):
+	def __init__(self, base_model: SegmentationModel, plugins: List[PluginBase] | None = None):
 		"""
 		初始化可扩展分割模型。
 		
@@ -100,6 +64,7 @@ class ExtendableSegmentationModel(nn.Module):
 		# 2. 运行所有插件的瓶颈层处理
 		first_feature = features[0] #目前所有smp的decoder都不处理第一个feature
 		for plugin in self.plugins:
+			plugin = cast(PluginBase, plugin)
 			features = plugin.bottleneck_layer(features[1:])
 		features = [first_feature] + features
 		
